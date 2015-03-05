@@ -29,6 +29,7 @@ from docopt import docopt
 
 from Bio import SeqIO
 
+from _find_motifs import all_kmer_scores, score_string
 
 
 def n_kmers(text, k):
@@ -40,38 +41,26 @@ letter_dict = dict((char, i) for i, char in enumerate(alphabet))
 
 
 def convert_string(s):
-    return np.array(list(letter_dict[c] for c in s), dtype=np.int)
+    return np.array(list(letter_dict[c] for c in s), dtype=np.uint)
 
 
 def revert_string(a):
     return ''.join(list(alphabet[i] for i in a))
 
 
-def score_kmer(text, idx, profile, k):
-    """Score a profile with a profile matrix"""
-    return reduce(add, (profile[text[idx + i], i] for i in range(k)), 0)
-
-
 def profile_random_kmer(text, profile):
     """Choose a kmer from `text` weighted by its probability"""
     k = profile.shape[1]
-    scores = np.array(list(score_kmer(text, idx, profile, k)
-                           for idx in range(n_kmers(text, k))))
+    scores = all_kmer_scores(text, profile, k)
     probs = renorm(np.exp2(scores))
     idx = np.random.choice(np.arange(len(probs)), 1, p=probs)
     return text[idx:idx + k]
 
 
-def score_string(string, profile):
-    """The max score over kmers in `string`."""
-    k = profile.shape[1]
-    return max(score_kmer(string, idx, profile, k)
-               for idx in range(n_kmers(string, k)))
-
-
 def _profile_column(column):
     column = column.ravel()
-    column = np.append(column, np.arange(4))  # pseudocounts
+    column = np.append(column, np.arange(4, dtype=np.uint))  # pseudocounts
+    column = column.astype(np.int)
     counts = np.bincount(column)
     result = np.log2(counts / counts.sum())
     return result.reshape((-1, 1))
