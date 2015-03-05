@@ -1,5 +1,7 @@
 #!/usr/bin/env python
+
 """
+Finds motifs in a subset of input sequences, using Gibbs sampling.
 
 Usage:
   find_motifs.py [options] <infile> <k> <N>
@@ -50,6 +52,7 @@ def score_kmer(kmer, profile):
 
 
 def score_string(string, profile):
+    """The max score over kmers in `string`."""
     k = len(profile)
     return max(score_kmer(kmer, profile) for kmer in kmers(string, k))
 
@@ -74,12 +77,13 @@ def invert(selected):
 
 
 def _profile(letters):
+    alphabet = 'ACGT'  # TODO: do not assume alphabet
     counter = Counter(letters)
-    counter.update("ACGT")
+    counter.update(alphabet)  # pseudocounts
     total = len(letters) + 4
     result = {letter: (count / total)
               for letter, count in counter.items()}
-    return {letter: result[letter] for letter in 'ACGT'}
+    return {letter: result[letter] for letter in alphabet}
 
 
 def make_profile(motifs, selected, exclude=None):
@@ -90,19 +94,31 @@ def make_profile(motifs, selected, exclude=None):
     return list(_profile(col) for col in zip(*motifs))
 
 
+def format_profile(profile):
+    """Format the most probable motif as a string"""
+    return ''.join(list(max(c, key=c.get) for c in profile))
+
+
 def score_state(scores, selected):
-    return min(select(scores, selected))
+    """Summarize scores of selected sequences"""
+    return sum(select(scores, selected))
+
+
+def _arghelper(scores, selected, operator):
+    """Returns (score, index) for `operator` selected score"""
+    return operator((s, i) for i, s in enumerate(scores) if selected[i])
 
 
 def argmin(scores, selected):
-    return min((s, i) for i, s in enumerate(scores) if selected[i])
+    return _arghelper(scores, selected, min)
 
 
 def argmax(scores, selected):
-    return max((s, i) for i, s in enumerate(scores) if selected[i])
+    return _arghelper(scores, selected, max)
 
 
-def _gibbs(seqs, k, N, iters, verbose=False):
+def _gibbs_round(seqs, k, N, iters, verbose=False):
+    """Run a round of Gibbs sampling."""
     n_seqs = len(seqs)
     motifs = list(random.choice(list(kmers(seq, k))) for seq in seqs)
     selected = [True] * N + [False] * (n_seqs - N)
@@ -156,20 +172,17 @@ def gibbs(seqs, k, N, iters, starts, verbose=False):
     results = []
     for i in range(starts):
         if verbose:
-            sys.stderr.write('Starting run {} of {}.\n'.format(i, starts))
+            sys.stderr.write('Starting run {} of {}.\n'.format(i + 1, starts))
             sys.stderr.flush()
-        results.append(_gibbs(seqs, k, N, iters, verbose))
+        results.append(_gibbs_round(seqs, k, N, iters, verbose))
     return max(results, key=lambda args: score_state(args[1], args[2]))
 
 
 def find_in_file(infile, k, N, iters, starts, verbose=False):
+    """Runs finder on sequences in a fasta file"""
     seqs = SeqIO.parse(infile, 'fasta')
     profile, _, _ = gibbs(seqs, k, N, iters, starts, verbose)
     print(profile)
-
-
-def format_profile(profile):
-    return ''.join(list(max(c, key=c.get) for c in profile))
 
 
 if __name__ == "__main__":
