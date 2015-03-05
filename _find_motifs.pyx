@@ -1,7 +1,11 @@
+#!python
+#cython: boundscheck=False
+#cython: wraparound=False
+
 import numpy as np
 
-def score_kmer(unsigned long[:] text, unsigned int idx,
-               double[:, :] profile, unsigned int k):
+cdef double score_kmer(unsigned long[:] text, unsigned int idx,
+               double[:, :] profile, unsigned int k) nogil:
     cdef double total = 0
     cdef unsigned int i
     for i in range(k):
@@ -14,8 +18,9 @@ def all_kmer_scores(unsigned long[:] text, double[:, :] profile, unsigned int k)
     result = np.empty(n_kmers, dtype=np.dtype("d"))
     cdef double [:] result_view = result
     cdef unsigned int i
-    for i in range(n_kmers):
-        result_view[i] = score_kmer(text, i, profile, k)
+    with nogil:
+        for i in range(n_kmers):
+            result_view[i] = score_kmer(text, i, profile, k)
     return result
 
 
@@ -25,8 +30,9 @@ def score_string(unsigned long[:] text, double[:, :] profile):
     cdef double result = score_kmer(text, 0, profile, k)
     cdef double cur
     cdef unsigned int i
-    for i in range(n_kmers):
-        cur = score_kmer(text, i, profile, k)
-        if cur > result:
-            result = cur
+    with nogil:
+        for i in range(n_kmers):
+            cur = score_kmer(text, i, profile, k)
+            if cur > result:
+                result = cur
     return result
