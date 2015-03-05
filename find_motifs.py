@@ -3,6 +3,8 @@
 """
 Finds motifs in a subset of input sequences, using Gibbs sampling.
 
+Prints PWM and ids of selected genes to standard output.
+
 Usage:
   find_motifs.py [options] <infile> <k> <N>
   find_motifs.py -h | --help
@@ -118,9 +120,11 @@ def _gibbs_round(seqs, k, N, iters, verbose=False):
     best_selected = selected.copy()
     best_scores = scores
     best_score = score_state(best_scores, best_selected)
+
+    iters_update = iters // 10
     for i in range(iters):
         if verbose:
-            if i % 100 == 0:
+            if i % iters_update == 0:
                 sys.stderr.write('  iteration {} of {}\n'.format(i, iters))
                 sys.stderr.flush()
 
@@ -149,8 +153,8 @@ def _gibbs_round(seqs, k, N, iters, verbose=False):
     return best_profile, best_scores, best_selected
 
 
-def gibbs(seqs, k, N, iters, starts, verbose=False):
-    """Run Gibbs sampling `starts` times.
+def gibbs(seqs, k, N, iters, runs, verbose=False):
+    """Run Gibbs sampling `runs` times.
 
     seqs: iterable of strings
     k: int, length of motif
@@ -159,19 +163,23 @@ def gibbs(seqs, k, N, iters, starts, verbose=False):
     """
     results = []
     seqs = list(convert_string(s) for s in seqs)
-    for i in range(starts):
+    for i in range(runs):
         if verbose:
-            sys.stderr.write('Starting run {} of {}.\n'.format(i + 1, starts))
+            sys.stderr.write('Starting run {} of {}.\n'.format(i + 1, runs))
             sys.stderr.flush()
         results.append(_gibbs_round(seqs, k, N, iters, verbose))
     return max(results, key=lambda args: score_state(args[1], args[2]))
 
 
-def find_in_file(infile, k, N, iters, starts, verbose=False):
+def find_in_file(infile, k, N, iters, runs, verbose=False):
     """Runs finder on sequences in a fasta file"""
-    seqs = SeqIO.parse(infile, 'fasta')
-    profile, _, _ = gibbs(seqs, k, N, iters, starts, verbose)
+    records = list(SeqIO.parse(infile, 'fasta'))
+    seqs = list(str(r.seq) for r in records)
+    profile, scores, selected = gibbs(seqs, k, N, iters, runs, verbose)
     print(profile)
+    print('')
+    for idx in np.nonzero(selected)[0]:
+        print(records[idx].id)
 
 
 if __name__ == "__main__":
@@ -182,4 +190,4 @@ if __name__ == "__main__":
     iters = int(args['--iters'])
     runs = int(args['--runs'])
     verbose = args['--verbose']
-    find_in_file(infile, k, iters, starts, verbose)
+    find_in_file(infile, k, N, iters, runs, verbose)
