@@ -29,7 +29,7 @@ from docopt import docopt
 
 from Bio import SeqIO
 
-from _find_motifs import all_kmer_scores, score_string
+from _find_motifs import make_profile, all_kmer_scores, score_string
 
 
 def n_kmers(text, k):
@@ -55,26 +55,6 @@ def profile_random_kmer(text, profile):
     probs = renorm(np.exp2(scores))
     idx = np.random.choice(np.arange(len(probs)), 1, p=probs)
     return text[idx:idx + k]
-
-
-def _profile_column(column):
-    column = column.ravel()
-    column = np.append(column, np.arange(4, dtype=np.uint))  # pseudocounts
-    column = column.astype(np.int)
-    counts = np.bincount(column)
-    result = np.log2(counts / counts.sum())
-    return result.reshape((-1, 1))
-
-
-def make_profile(motifs, selected, exclude=None):
-    """Make a profile from a list of strings, with pseudocounts"""
-    if exclude is not None:
-        selected = selected.copy()
-        selected[exclude] = False
-    motifs = motifs[selected]
-    cols = list(_profile_column(motifs[:, c]) for c in range(motifs.shape[1]))
-    result = np.hstack(cols)
-    return result
 
 
 def format_profile(profile):
@@ -119,6 +99,11 @@ def swap_cands(scores, selected):
     return included_idx, excluded_idx
 
 
+def make_profile_helper(motifs, selected, exclude=-1, alphsize=4):
+    return make_profile(motifs, selected.astype(np.uint8),
+                        exclude, alphsize)
+
+
 def _gibbs_round(seqs, k, N, iters, verbose=False):
     """Run a round of Gibbs sampling."""
     n_seqs = len(seqs)
@@ -127,7 +112,7 @@ def _gibbs_round(seqs, k, N, iters, verbose=False):
     selected = np.zeros(n_seqs, dtype=np.bool)
     selected[:N] = True
     np.random.shuffle(selected)
-    profile = make_profile(motifs, selected)
+    profile = make_profile_helper(motifs, selected)
     scores = np.array(list(score_string(seq, profile) for seq in seqs))
     best_profile = profile
     best_selected = selected.copy()
@@ -146,10 +131,10 @@ def _gibbs_round(seqs, k, N, iters, verbose=False):
             selected[to_remove] = False
             selected[to_add] = True
             motifs[to_add] = profile_random_kmer(seqs[to_add], profile)
-            profile = make_profile(motifs, selected)
+            profile = make_profile_helper(motifs, selected)
         else:
             idx = random.choice(np.nonzero(selected)[0])
-            profile = make_profile(motifs, selected, idx)
+            profile = make_profile_helper(motifs, selected, idx)
             motifs[idx] = profile_random_kmer(seqs[idx], profile)
 
         scores = np.array(list(score_string(seq, profile) for seq in seqs))

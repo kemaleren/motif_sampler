@@ -3,6 +3,37 @@
 #cython: wraparound=False
 
 import numpy as np
+cimport numpy as np
+
+
+def make_profile(unsigned long[:, :] motifs, np.uint8_t[:] selected,
+                 long exclude, unsigned int alphabet_size):
+    cdef unsigned int n_motifs = motifs.shape[0]
+    cdef unsigned int k = motifs.shape[1]
+
+    counts = np.ones((alphabet_size, k), dtype=np.uint64)
+    cdef unsigned long [:, :] counts_view = counts
+    result = np.zeros((alphabet_size, k), dtype=np.dtype('d'))
+    cdef double [:, :] result_view = result
+
+    cdef long denom = alphabet_size
+
+    cdef unsigned int i
+    cdef unsigned int j
+
+    for i in range(n_motifs):
+        if (not selected[i]) or (i == exclude):
+            continue
+        denom += 1
+        for j in range(k):
+            counts_view[motifs[i, j], j] += 1
+
+    cdef double ddenom = <double> denom
+    for i in range(alphabet_size):
+        for j in range(k):
+            result_view[i, j] = np.log2(<double> (counts_view[i, j]) / ddenom)
+    return result
+
 
 cdef double score_kmer(unsigned long[:] text, unsigned int idx,
                double[:, :] profile, unsigned int k) nogil:
