@@ -19,7 +19,6 @@ Options:
 
 import sys
 import math
-import random
 from functools import reduce
 from operator import add
 from collections import Counter
@@ -86,7 +85,7 @@ def argmax(scores, selected):
 
 
 def log_bernoulli(log_p):
-    return math.log2(random.random()) < log_p
+    return math.log2(np.random.random()) < log_p
 
 
 def renorm(probs):
@@ -101,7 +100,7 @@ def make_profile_helper(motifs, selected, exclude=-1, alphsize=4):
 def _sampler_run(seqs, k, N, iters, verbose=False):
     """Run a round of sampling"""
     n_seqs = len(seqs)
-    motif_indices = list(random.randint(0, n_kmers(seq, k) - 1) for seq in seqs)
+    motif_indices = list(np.random.randint(0, n_kmers(seq, k)) for seq in seqs)
     motifs = np.vstack(list(seq[i:i + k] for i, seq in zip(motif_indices, seqs)))
     selected = np.zeros(n_seqs, dtype=np.bool)
     selected[:N] = True
