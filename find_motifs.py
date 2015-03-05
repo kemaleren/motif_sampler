@@ -22,7 +22,7 @@ from functools import reduce
 from operator import add
 from collections import Counter
 
-import numpy
+import numpy as np
 import numpy.random
 
 from docopt import docopt
@@ -64,7 +64,7 @@ def profile_random_kmer(text, profile):
     probs = list(math.pow(2, score_kmer(kmer, profile)) for kmer in _kmers)
     s = sum(probs)
     probs = list(p / s for p in probs)
-    result = numpy.random.choice(_kmers, 1, p=probs)
+    result = np.random.choice(_kmers, 1, p=probs)
     return result[0]
 
 
@@ -73,7 +73,7 @@ def select(iterable, selected):
 
 
 def invert(selected):
-    return list(not s for s in selected)
+    return 1 - selected
 
 
 def _profile(letters):
@@ -101,7 +101,7 @@ def format_profile(profile):
 
 def score_state(scores, selected):
     """Summarize scores of selected sequences"""
-    return sum(select(scores, selected))
+    return scores[selected].sum()
 
 
 def _arghelper(scores, selected, operator):
@@ -117,47 +117,65 @@ def argmax(scores, selected):
     return _arghelper(scores, selected, max)
 
 
+def log_bernoulli(log_p):
+    return math.log2(random.random()) < log_p
+
+
+def renorm(probs):
+    return probs / probs.sum()
+
+
+def swap_cands(scores, selected):
+    included = np.nonzero(selected)[0]
+    excluded = np.nonzero(invert(selected))[0]
+    included_idx = np.random.choice(included, 1,
+                                    p=renorm(np.exp2(scores[included])))[0]
+    excluded_idx = np.random.choice(excluded, 1,
+                                    p=renorm(np.exp2(scores[excluded])))[0]
+    return included_idx, excluded_idx
+
+
 def _gibbs_round(seqs, k, N, iters, verbose=False):
     """Run a round of Gibbs sampling."""
     n_seqs = len(seqs)
     motifs = list(random.choice(list(kmers(seq, k))) for seq in seqs)
-    selected = [True] * N + [False] * (n_seqs - N)
-    random.shuffle(selected)
+    selected = np.zeros(n_seqs, dtype=np.bool)
+    selected[:N] = True
+    np.random.shuffle(selected)
     profile = make_profile(motifs, selected)
-    scores = list(score_string(seq, profile) for seq in seqs)
+    scores = np.array(list(score_string(seq, profile) for seq in seqs))
     best_profile = profile
     best_selected = selected
     best_scores = scores
+    best_score = score_state(best_scores, best_selected)
     for i in range(iters):
         if verbose:
             if i % 100 == 0:
                 sys.stderr.write('  iteration {} of {}\n'.format(i, iters))
                 sys.stderr.flush()
 
-        # swap out a sequence, if possible
-        incl_score, included = argmin(scores, selected)
-        excl_score, excluded = argmax(scores, invert(selected))
-        if excl_score > incl_score:
-            # TODO: do this probabilistically
-            assert(selected[included])
-            assert(not selected[excluded])
-            selected[included] = False
-            selected[excluded] = True
-            idx = excluded
-            profile = make_profile(motifs, selected, idx)
-            motifs[idx] = profile_random_kmer(seqs[idx], profile)
+        # swap out a sequence, maybe
+        to_remove, to_add = swap_cands(scores, selected)
+        log_ratio = scores[to_add] - scores[to_remove]
+        if log_ratio > 0 or log_bernoulli(log_ratio):
+            selected[to_remove] = False
+            selected[to_add] = True
+            motifs[to_add] = profile_random_kmer(seqs[to_add], profile)
+            profile = make_profile(motifs, selected)
         else:
-            idx = random.choice(list(i for i, s in enumerate(selected) if i))
+            idx = random.choice(np.nonzero(selected)[0])
             profile = make_profile(motifs, selected, idx)
             motifs[idx] = profile_random_kmer(seqs[idx], profile)
 
-        scores = list(score_string(seq, profile) for seq in seqs)
+        scores = np.array(list(score_string(seq, profile) for seq in seqs))
+        score = score_state(scores, selected)
 
         # update best
-        if score_state(scores, selected) > score_state(best_scores, best_selected):
+        if score > best_score:
+            best_score = score
             best_profile = profile
             best_scores = scores
-            best_selected = selected
+            best_selected = selected.copy()
     return best_profile, best_scores, best_selected
 
 
