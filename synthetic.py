@@ -10,14 +10,12 @@ def random_string(alphabet, length):
     return ''.join(random.choice(alphabet) for _ in range(length))
 
 
-def run():
+def run(iters=1000, starts=1):
     alphabet = 'ACGT'
     n_strings = 20
     N = 5
     length = 100
     k = 10
-    iters = 50
-    starts = 50
     motif = random_string(alphabet, k)
     seqs = list(random_string('ACGT', length) for _ in range(n_strings))
     for i in range(N):
