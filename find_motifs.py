@@ -42,13 +42,8 @@ def kmers(text, k):
 
 
 def score_kmer(kmer, profile):
-    """Score a profile with a profile matrix
-
-    >>> str(round(score('aa', [{'a': 0.7, 'g': 0.3}, {'a': 0.7, 'g': 0.3}]), 2))
-    '0.49'
-
-    """
-    return reduce(add, (math.log2(p[l]) for l, p in zip(kmer, profile)), 0)
+    """Score a profile with a profile matrix"""
+    return reduce(add, (p[l] for l, p in zip(kmer, profile)), 0)
 
 
 def score_string(string, profile):
@@ -81,7 +76,7 @@ def _profile(letters):
     counter = Counter(letters)
     counter.update(alphabet)  # pseudocounts
     total = len(letters) + 4
-    result = {letter: (count / total)
+    result = {letter: math.log2(count / total)
               for letter, count in counter.items()}
     return {letter: result[letter] for letter in alphabet}
 
