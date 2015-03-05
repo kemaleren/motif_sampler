@@ -31,7 +31,10 @@ from docopt import docopt
 
 from Bio import SeqIO
 
-from _motif_sampler import make_profile, all_kmer_scores, score_string, choose_index
+from _motif_sampler import make_profile, all_kmer_scores, score_string
+from _motif_sampler import choose_index, choose_index_selected
+from _motif_sampler import choose_index_selected_unweighted
+
 
 
 def n_kmers(text, k):
@@ -54,8 +57,7 @@ def profile_random_kmer(text, profile):
     """Choose a kmer from `text` weighted by its probability"""
     k = profile.shape[1]
     scores = all_kmer_scores(text, profile, k)
-    probs = renorm(np.exp2(scores))
-    idx = np.random.choice(np.arange(len(probs)), 1, p=probs)
+    idx = choose_index(np.exp2(scores))
     return text[idx:idx + k]
 
 
@@ -99,7 +101,7 @@ def make_profile_helper(motifs, selected, exclude=-1, alphsize=4):
 def _sampler_run(seqs, k, N, iters, verbose=False):
     """Run a round of sampling"""
     n_seqs = len(seqs)
-    motif_indices = list(random.choice(range(n_kmers(seq, k))) for seq in seqs)
+    motif_indices = list(random.randint(0, n_kmers(seq, k) - 1) for seq in seqs)
     motifs = np.vstack(list(seq[i:i + k] for i, seq in zip(motif_indices, seqs)))
     selected = np.zeros(n_seqs, dtype=np.bool)
     selected[:N] = True
@@ -121,8 +123,8 @@ def _sampler_run(seqs, k, N, iters, verbose=False):
         # swap out a sequence, maybe
         weights = np.exp2(scores)
         _selected = selected.astype(np.uint8)
-        to_remove = choose_index(weights, _selected)
-        to_add = choose_index(weights, 1 - _selected)
+        to_remove = choose_index_selected(weights, _selected)
+        to_add = choose_index_selected(weights, 1 - _selected)
         log_ratio = scores[to_add] - scores[to_remove]
         if log_ratio > 0 or log_bernoulli(log_ratio):
             selected[to_remove] = False
@@ -130,7 +132,7 @@ def _sampler_run(seqs, k, N, iters, verbose=False):
             motifs[to_add] = profile_random_kmer(seqs[to_add], profile)
             profile = make_profile_helper(motifs, selected)
         else:
-            idx = random.choice(np.nonzero(selected)[0])
+            idx = choose_index_selected_unweighted(selected.astype(np.uint8))
             profile = make_profile_helper(motifs, selected, idx)
             motifs[idx] = profile_random_kmer(seqs[idx], profile)
 

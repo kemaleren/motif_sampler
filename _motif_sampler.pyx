@@ -6,7 +6,23 @@ import numpy as np
 cimport numpy as np
 
 
-def choose_index(double[:] weights, np.uint8_t[:] selected):
+def choose_index(double[:] weights):
+    """Choose an index, weighted by `weights`."""
+    cdef double total = 0
+    cdef unsigned int i
+    for i in range(weights.shape[0]):
+        total += weights[i]
+
+    cdef double x = total * np.random.random()
+    cdef double w = 0
+    for i in range(weights.shape[0]):
+        w += weights[i]
+        if w > x:
+            return i
+    assert(False)
+
+
+def choose_index_selected(double[:] weights, np.uint8_t[:] selected):
     """Choose a selected index, weighted by `weights`."""
     cdef double total = 0
     cdef unsigned int i
@@ -15,12 +31,28 @@ def choose_index(double[:] weights, np.uint8_t[:] selected):
             total += weights[i]
 
     cdef double x = total * np.random.random()
-    assert x >= 0
-    assert x <= total
     cdef double w = 0
     for i in range(weights.shape[0]):
         if selected[i]:
             w += weights[i]
+            if w > x:
+                return i
+    assert(False)
+
+
+def choose_index_selected_unweighted(np.uint8_t[:] selected):
+    """Choose a selected index"""
+    cdef double total = 0
+    cdef unsigned int i
+    for i in range(selected.shape[0]):
+        if selected[i]:
+            total += 1
+
+    cdef double x = total * np.random.random()
+    cdef double w = 0
+    for i in range(selected.shape[0]):
+        if selected[i]:
+            w += 1
             if w > x:
                 return i
     assert(False)
