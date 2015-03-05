@@ -56,7 +56,8 @@ def profile_random_kmer(text, profile):
     """Choose a kmer from `text` weighted by its probability"""
     k = len(profile)
     _kmers = list(kmers(text, k))
-    probs = list(math.pow(2, score_kmer(kmer, profile)) for kmer in _kmers)
+    scores = np.array(list(score_kmer(kmer, profile) for kmer in _kmers))
+    probs = np.exp2(scores)
     s = sum(probs)
     probs = list(p / s for p in probs)
     result = np.random.choice(_kmers, 1, p=probs)
