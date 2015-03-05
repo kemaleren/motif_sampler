@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Finds motifs in a subset of input sequences, using Gibbs sampling.
+Finds motifs in a subset of input sequences.
 
 Prints PWM and ids of selected genes to standard output.
 
@@ -31,7 +31,7 @@ from docopt import docopt
 
 from Bio import SeqIO
 
-from _find_motifs import make_profile, all_kmer_scores, score_string
+from _motif_sampler import make_profile, all_kmer_scores, score_string
 
 
 def n_kmers(text, k):
@@ -106,8 +106,8 @@ def make_profile_helper(motifs, selected, exclude=-1, alphsize=4):
                         exclude, alphsize)
 
 
-def _gibbs_round(seqs, k, N, iters, verbose=False):
-    """Run a round of Gibbs sampling."""
+def _sampler_run(seqs, k, N, iters, verbose=False):
+    """Run a round of sampling"""
     n_seqs = len(seqs)
     motif_indices = list(random.choice(range(n_kmers(seq, k))) for seq in seqs)
     motifs = np.vstack(list(seq[i:i + k] for i, seq in zip(motif_indices, seqs)))
@@ -153,8 +153,8 @@ def _gibbs_round(seqs, k, N, iters, verbose=False):
     return best_profile, best_scores, best_selected
 
 
-def gibbs(seqs, k, N, iters, runs, verbose=False):
-    """Run Gibbs sampling `runs` times.
+def sampler(seqs, k, N, iters, runs, verbose=False):
+    """Run sampler `runs` times.
 
     seqs: iterable of strings
     k: int, length of motif
@@ -167,7 +167,7 @@ def gibbs(seqs, k, N, iters, runs, verbose=False):
         if verbose:
             sys.stderr.write('Starting run {} of {}.\n'.format(i + 1, runs))
             sys.stderr.flush()
-        results.append(_gibbs_round(seqs, k, N, iters, verbose))
+        results.append(_sampler_run(seqs, k, N, iters, verbose))
     return max(results, key=lambda args: score_state(args[1], args[2]))
 
 
@@ -175,7 +175,7 @@ def find_in_file(infile, k, N, iters, runs, verbose=False):
     """Runs finder on sequences in a fasta file"""
     records = list(SeqIO.parse(infile, 'fasta'))
     seqs = list(str(r.seq) for r in records)
-    profile, scores, selected = gibbs(seqs, k, N, iters, runs, verbose)
+    profile, scores, selected = sampler(seqs, k, N, iters, runs, verbose)
     print(profile)
     print('')
     for idx in np.nonzero(selected)[0]:

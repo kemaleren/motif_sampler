@@ -3,7 +3,7 @@ from pprint import pprint
 
 import numpy as np
 
-from find_motifs import gibbs, format_profile
+from motif_sampler import sampler, format_profile
 
 
 def random_string(alphabet, length):
@@ -20,7 +20,7 @@ def run(iters=1000, starts=1):
     seqs = list(random_string('ACGT', length) for _ in range(n_strings))
     for i in range(N):
         seqs[i] = ''.join((motif, seqs[i][len(motif):]))
-    profile, score, selected = gibbs(seqs, k, N, iters, starts, verbose=True)
+    profile, score, selected = sampler(seqs, k, N, iters, starts, verbose=True)
     print(motif)
     print(format_profile(profile))
     print(np.nonzero(selected)[0])
