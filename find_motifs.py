@@ -141,7 +141,7 @@ def _gibbs_round(seqs, k, N, iters, verbose=False):
     profile = make_profile(motifs, selected)
     scores = np.array(list(score_string(seq, profile) for seq in seqs))
     best_profile = profile
-    best_selected = selected
+    best_selected = selected.copy()
     best_scores = scores
     best_score = score_state(best_scores, best_selected)
     for i in range(iters):
