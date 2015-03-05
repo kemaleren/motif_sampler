@@ -30,69 +30,68 @@ from docopt import docopt
 from Bio import SeqIO
 
 
-def kmers(text, k):
-    """Generates all `k`-length strings in `text`.
 
-    >>> list(kmers("abcd", 2))
-    ['ab', 'bc', 'cd']
-
-    """
-    for i in range(len(text) - k + 1):
-        yield text[i:i + k]
+def n_kmers(text, k):
+    return len(text) - k + 1
 
 
-def score_kmer(kmer, profile):
+alphabet = 'ACGT'
+letter_dict = dict((char, i) for i, char in enumerate(alphabet))
+
+
+def convert_string(s):
+    return np.array(list(letter_dict[c] for c in s), dtype=np.int)
+
+
+def revert_string(a):
+    return ''.join(list(alphabet[i] for i in a))
+
+
+def score_kmer(text, idx, profile, k):
     """Score a profile with a profile matrix"""
-    return reduce(add, (p[l] for l, p in zip(kmer, profile)), 0)
-
-
-def score_string(string, profile):
-    """The max score over kmers in `string`."""
-    k = len(profile)
-    return max(score_kmer(kmer, profile) for kmer in kmers(string, k))
+    return reduce(add, (profile[text[idx + i], i] for i in range(k)), 0)
 
 
 def profile_random_kmer(text, profile):
     """Choose a kmer from `text` weighted by its probability"""
-    k = len(profile)
-    _kmers = list(kmers(text, k))
-    scores = np.array(list(score_kmer(kmer, profile) for kmer in _kmers))
-    probs = np.exp2(scores)
-    s = sum(probs)
-    probs = list(p / s for p in probs)
-    result = np.random.choice(_kmers, 1, p=probs)
-    return result[0]
+    k = profile.shape[1]
+    scores = np.array(list(score_kmer(text, idx, profile, k)
+                           for idx in range(n_kmers(text, k))))
+    probs = renorm(np.exp2(scores))
+    idx = np.random.choice(np.arange(len(probs)), 1, p=probs)
+    return text[idx:idx + k]
 
 
-def select(iterable, selected):
-    return list(elt for elt, s in zip(iterable, selected) if s)
+def score_string(string, profile):
+    """The max score over kmers in `string`."""
+    k = profile.shape[1]
+    return max(score_kmer(string, idx, profile, k)
+               for idx in range(n_kmers(string, k)))
 
 
-def invert(selected):
-    return 1 - selected
-
-
-def _profile(letters):
-    alphabet = 'ACGT'  # TODO: do not assume alphabet
-    counter = Counter(letters)
-    counter.update(alphabet)  # pseudocounts
-    total = len(letters) + 4
-    result = {letter: math.log2(count / total)
-              for letter, count in counter.items()}
-    return {letter: result[letter] for letter in alphabet}
+def _profile_column(column):
+    column = column.ravel()
+    column = np.append(column, np.arange(4))  # pseudocounts
+    counts = np.bincount(column)
+    result = np.log2(counts / counts.sum())
+    return result.reshape((-1, 1))
 
 
 def make_profile(motifs, selected, exclude=None):
     """Make a profile from a list of strings, with pseudocounts"""
-    motifs = select(motifs, selected)
     if exclude is not None:
-        motifs = motifs[:exclude] + motifs[exclude + 1:]
-    return list(_profile(col) for col in zip(*motifs))
+        selected = selected.copy()
+        selected[exclude] = False
+    motifs = motifs[selected]
+    cols = list(_profile_column(motifs[:, c]) for c in range(motifs.shape[1]))
+    result = np.hstack(cols)
+    return result
 
 
 def format_profile(profile):
     """Format the most probable motif as a string"""
-    return ''.join(list(max(c, key=c.get) for c in profile))
+    motif = profile.argmax(axis=0)
+    return revert_string(motif)
 
 
 def score_state(scores, selected):
@@ -123,7 +122,7 @@ def renorm(probs):
 
 def swap_cands(scores, selected):
     included = np.nonzero(selected)[0]
-    excluded = np.nonzero(invert(selected))[0]
+    excluded = np.nonzero(1 - selected)[0]
     included_idx = np.random.choice(included, 1,
                                     p=renorm(np.exp2(scores[included])))[0]
     excluded_idx = np.random.choice(excluded, 1,
@@ -134,7 +133,8 @@ def swap_cands(scores, selected):
 def _gibbs_round(seqs, k, N, iters, verbose=False):
     """Run a round of Gibbs sampling."""
     n_seqs = len(seqs)
-    motifs = list(random.choice(list(kmers(seq, k))) for seq in seqs)
+    motif_indices = list(random.choice(range(n_kmers(seq, k))) for seq in seqs)
+    motifs = np.vstack(list(seq[i:i + k] for i, seq in zip(motif_indices, seqs)))
     selected = np.zeros(n_seqs, dtype=np.bool)
     selected[:N] = True
     np.random.shuffle(selected)
@@ -184,6 +184,7 @@ def gibbs(seqs, k, N, iters, starts, verbose=False):
 
     """
     results = []
+    seqs = list(convert_string(s) for s in seqs)
     for i in range(starts):
         if verbose:
             sys.stderr.write('Starting run {} of {}.\n'.format(i + 1, starts))
