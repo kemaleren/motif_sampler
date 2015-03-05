@@ -6,6 +6,26 @@ import numpy as np
 cimport numpy as np
 
 
+def choose_index(double[:] weights, np.uint8_t[:] selected):
+    """Choose a selected index, weighted by `weights`."""
+    cdef double total = 0
+    cdef unsigned int i
+    for i in range(weights.shape[0]):
+        if selected[i]:
+            total += weights[i]
+
+    cdef double x = total * np.random.random()
+    assert x >= 0
+    assert x <= total
+    cdef double w = 0
+    for i in range(weights.shape[0]):
+        if selected[i]:
+            w += weights[i]
+            if w > x:
+                return i
+    assert(False)
+
+
 def make_profile(unsigned long[:, :] motifs, np.uint8_t[:] selected,
                  long exclude, unsigned int alphabet_size):
     cdef unsigned int n_motifs = motifs.shape[0]

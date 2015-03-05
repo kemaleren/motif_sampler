@@ -31,7 +31,7 @@ from docopt import docopt
 
 from Bio import SeqIO
 
-from _motif_sampler import make_profile, all_kmer_scores, score_string
+from _motif_sampler import make_profile, all_kmer_scores, score_string, choose_index
 
 
 def n_kmers(text, k):
@@ -91,16 +91,6 @@ def renorm(probs):
     return probs / probs.sum()
 
 
-def swap_cands(scores, selected):
-    included = np.nonzero(selected)[0]
-    excluded = np.nonzero(1 - selected)[0]
-    included_idx = np.random.choice(included, 1,
-                                    p=renorm(np.exp2(scores[included])))[0]
-    excluded_idx = np.random.choice(excluded, 1,
-                                    p=renorm(np.exp2(scores[excluded])))[0]
-    return included_idx, excluded_idx
-
-
 def make_profile_helper(motifs, selected, exclude=-1, alphsize=4):
     return make_profile(motifs, selected.astype(np.uint8),
                         exclude, alphsize)
@@ -129,7 +119,10 @@ def _sampler_run(seqs, k, N, iters, verbose=False):
                 sys.stderr.flush()
 
         # swap out a sequence, maybe
-        to_remove, to_add = swap_cands(scores, selected)
+        weights = np.exp2(scores)
+        _selected = selected.astype(np.uint8)
+        to_remove = choose_index(weights, _selected)
+        to_add = choose_index(weights, 1 - _selected)
         log_ratio = scores[to_add] - scores[to_remove]
         if log_ratio > 0 or log_bernoulli(log_ratio):
             selected[to_remove] = False
