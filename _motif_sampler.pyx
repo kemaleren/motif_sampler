@@ -5,71 +5,97 @@
 import numpy as np
 cimport numpy as np
 
+from libc.math cimport log2
+from libc.stdlib cimport rand
+
+cdef extern from "limits.h":
+    int INT_MAX
+
+
+cdef float fintmax = float(INT_MAX)
+
+
+cdef float myrandom() nogil:
+    return rand() / fintmax
+
 
 def choose_index(double[:] weights):
     """Choose an index, weighted by `weights`."""
     cdef double total = 0
-    cdef unsigned int i
-    for i in range(weights.shape[0]):
-        total += weights[i]
-
-    cdef double x = total * np.random.random()
+    cdef unsigned int i = 0
+    cdef unsigned int result = 0
+    cdef double x
     cdef double w = 0
-    for i in range(weights.shape[0]):
-        w += weights[i]
-        if w > x:
-            return i
-    assert(False)
+    with nogil:
+        for i in range(weights.shape[0]):
+            total += weights[i]
+        x = total * myrandom()
+
+        for i in range(weights.shape[0]):
+            w += weights[i]
+            if w > x:
+                result = i
+                break
+    return result
 
 
 def invert_selected(double[:] weights, np.uint8_t[:] selected):
-    cdef double total = 0
-    cdef unsigned int i
     result = np.empty_like(weights)
     cdef double [:] result_view = result
-    for i in range(weights.shape[0]):
-        if selected[i]:
-            total += weights[i]
-    for i in range(weights.shape[0]):
-        if selected[i]:
-            result_view[i] = 1 - (weights[i] / total)
+    cdef double total = 0
+    cdef unsigned int i
+    with nogil:
+        for i in range(weights.shape[0]):
+            if selected[i]:
+                total += weights[i]
+        for i in range(weights.shape[0]):
+            if selected[i]:
+                result_view[i] = 1 - (weights[i] / total)
     return result
 
 
 def choose_index_selected(double[:] weights, np.uint8_t[:] selected):
     """Choose a selected index, weighted by `weights`."""
     cdef double total = 0
-    cdef unsigned int i
-    for i in range(weights.shape[0]):
-        if selected[i]:
-            total += weights[i]
-
-    cdef double x = total * np.random.random()
+    cdef unsigned int i = 0
+    cdef unsigned int result = 0
+    cdef double x
     cdef double w = 0
-    for i in range(weights.shape[0]):
-        if selected[i]:
-            w += weights[i]
-            if w > x:
-                return i
-    assert(False)
+
+    with nogil:
+        for i in range(weights.shape[0]):
+            if selected[i]:
+                total += weights[i]
+        x = total * myrandom()
+        for i in range(weights.shape[0]):
+            if selected[i]:
+                w += weights[i]
+                if w > x:
+                    result = i
+                    break
+    return result
 
 
 def choose_index_selected_unweighted(np.uint8_t[:] selected):
     """Choose a selected index"""
     cdef double total = 0
-    cdef unsigned int i
-    for i in range(selected.shape[0]):
-        if selected[i]:
-            total += 1
-
-    cdef double x = total * np.random.random()
+    cdef unsigned int i = 0
+    cdef unsigned int result = 0
+    cdef double x
     cdef double w = 0
-    for i in range(selected.shape[0]):
-        if selected[i]:
-            w += 1
-            if w > x:
-                return i
-    assert(False)
+
+    with nogil:
+        for i in range(selected.shape[0]):
+            if selected[i]:
+                total += 1
+        x = total * myrandom()
+        for i in range(selected.shape[0]):
+            if selected[i]:
+                w += 1
+                if w > x:
+                    result = i
+                    break
+    return result
 
 
 def make_profile(unsigned long[:, :] motifs, np.uint8_t[:] selected,
@@ -87,17 +113,20 @@ def make_profile(unsigned long[:, :] motifs, np.uint8_t[:] selected,
     cdef unsigned int i
     cdef unsigned int j
 
-    for i in range(n_motifs):
-        if (not selected[i]) or (i == exclude):
-            continue
-        denom += 1
-        for j in range(k):
-            counts_view[motifs[i, j], j] += 1
+    cdef double ddenom
 
-    cdef double ddenom = <double> denom
-    for i in range(alphabet_size):
-        for j in range(k):
-            result_view[i, j] = np.log2(<double> (counts_view[i, j]) / ddenom)
+    with nogil:
+        for i in range(n_motifs):
+            if (not selected[i]) or (i == exclude):
+                continue
+            denom += 1
+            for j in range(k):
+                counts_view[motifs[i, j], j] += 1
+
+        ddenom = <double> denom
+        for i in range(alphabet_size):
+            for j in range(k):
+                result_view[i, j] = log2(<double> (counts_view[i, j]) / ddenom)
     return result
 
 
