@@ -90,7 +90,7 @@ def _sampler_run(seqs, k, N, iters, verbose=False):
     selected[:N] = True
     np.random.shuffle(selected)
     profile = make_profile_helper(motifs, selected)
-    scores = np.array(list(score_string(seq, profile) for seq in seqs))
+    scores = np.array(list(score_string(seq, profile) for seq in seqs), dtype=np.float32)
     best_profile = profile
     best_selected = selected.copy()
     best_scores = scores
@@ -120,7 +120,7 @@ def _sampler_run(seqs, k, N, iters, verbose=False):
             profile = make_profile_helper(motifs, selected, idx)
             motifs[idx] = profile_random_kmer(seqs[idx], profile)
 
-        scores = np.array(list(score_string(seq, profile) for seq in seqs))
+        scores = np.array(list(score_string(seq, profile) for seq in seqs), dtype=np.float32)
         score = score_state(scores, selected)
 
         # update best
