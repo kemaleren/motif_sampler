@@ -21,9 +21,10 @@ def run(iters=1000, starts=1, verbose=True):
     for i in range(N):
         seqs[i] = ''.join((motif, seqs[i][len(motif):]))
     profile, score, selected = sampler(seqs, k, N, iters, starts, verbose=verbose)
-    print(motif)
-    print(format_profile(profile))
-    print(np.nonzero(selected)[0])
+    if verbose:
+        print(motif)
+        print(format_profile(profile))
+        print(np.nonzero(selected)[0])
 
 
 if __name__ == "__main__":
