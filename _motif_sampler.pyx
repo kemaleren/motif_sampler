@@ -22,6 +22,20 @@ def choose_index(double[:] weights):
     assert(False)
 
 
+def invert_selected(double[:] weights, np.uint8_t[:] selected):
+    cdef double total = 0
+    cdef unsigned int i
+    result = np.empty_like(weights)
+    cdef double [:] result_view = result
+    for i in range(weights.shape[0]):
+        if selected[i]:
+            total += weights[i]
+    for i in range(weights.shape[0]):
+        if selected[i]:
+            result_view[i] = 1 - (weights[i] / total)
+    return result
+
+
 def choose_index_selected(double[:] weights, np.uint8_t[:] selected):
     """Choose a selected index, weighted by `weights`."""
     cdef double total = 0

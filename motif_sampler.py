@@ -33,6 +33,7 @@ from Bio import SeqIO
 from _motif_sampler import make_profile, all_kmer_scores, score_string
 from _motif_sampler import choose_index, choose_index_selected
 from _motif_sampler import choose_index_selected_unweighted
+from _motif_sampler import invert_selected
 
 
 
@@ -71,25 +72,8 @@ def score_state(scores, selected):
     return scores[selected].sum()
 
 
-def _arghelper(scores, selected, operator):
-    """Returns (score, index) for `operator` selected score"""
-    return operator((s, i) for i, s in enumerate(scores) if selected[i])
-
-
-def argmin(scores, selected):
-    return _arghelper(scores, selected, min)
-
-
-def argmax(scores, selected):
-    return _arghelper(scores, selected, max)
-
-
 def log_bernoulli(log_p):
     return math.log2(np.random.random()) < log_p
-
-
-def renorm(probs):
-    return probs / probs.sum()
 
 
 def make_profile_helper(motifs, selected, exclude=-1, alphsize=4):
@@ -122,7 +106,8 @@ def _sampler_run(seqs, k, N, iters, verbose=False):
         # swap out a sequence, maybe
         weights = np.exp2(scores)
         _selected = selected.astype(np.uint8)
-        to_remove = choose_index_selected(weights, _selected)
+        inv_weights = invert_selected(weights, _selected)
+        to_remove = choose_index_selected(inv_weights, _selected)
         to_add = choose_index_selected(weights, 1 - _selected)
         log_ratio = scores[to_add] - scores[to_remove]
         if log_ratio > 0 or log_bernoulli(log_ratio):

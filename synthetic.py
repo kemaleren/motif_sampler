@@ -10,7 +10,7 @@ def random_string(alphabet, length):
     return ''.join(random.choice(alphabet) for _ in range(length))
 
 
-def run(iters=1000, starts=10, verbose=True):
+def run(iters=1000, starts=1, verbose=True):
     alphabet = 'ACGT'
     n_strings = 20
     N = 5
