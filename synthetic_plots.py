@@ -147,11 +147,7 @@ def run_all(outdir):
             pp.ylabel(ykey)
             pp.title('')
             pp.savefig(os.path.join(outdir, filename))
-        # runtime
-        # motif distance
-        # found strings
-        # motif entropy
-
+            pp.close()
 
 
 if __name__ == "__main__":
