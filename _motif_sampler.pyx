@@ -5,7 +5,7 @@
 import numpy as np
 cimport numpy as np
 
-from libc.math cimport log2
+from libc.math cimport log
 from libc.stdlib cimport rand
 
 cdef extern from "limits.h":
@@ -126,7 +126,7 @@ def make_profile(unsigned long[:, :] motifs, np.uint8_t[:] selected,
         ddenom = <float> denom
         for i in range(alphabet_size):
             for j in range(k):
-                result_view[i, j] = log2(<float> (counts_view[i, j]) / ddenom)
+                result_view[i, j] = log(<float> (counts_view[i, j]) / ddenom)
     return result
 
 

@@ -57,7 +57,7 @@ def profile_random_kmer(text, profile):
     """Choose a kmer from `text` weighted by its probability"""
     k = profile.shape[1]
     scores = all_kmer_scores(text, profile, k)
-    idx = choose_index(np.exp2(scores))
+    idx = choose_index(np.exp(scores))
     return text[idx:idx + k]
 
 
@@ -73,7 +73,7 @@ def score_state(scores, selected):
 
 
 def log_bernoulli(log_p):
-    return math.log2(np.random.random()) < log_p
+    return math.log(np.random.random()) < log_p
 
 
 def make_profile_helper(motifs, selected, exclude=-1, alphsize=4):
@@ -104,7 +104,7 @@ def _sampler_run(seqs, k, N, iters, verbose=False):
                 sys.stderr.flush()
 
         # swap out a sequence, maybe
-        weights = np.exp2(scores)
+        weights = np.exp(scores)
         _selected = selected.astype(np.uint8)
         inv_weights = invert_selected(weights, _selected)
         to_remove = choose_index_selected(inv_weights, _selected)
