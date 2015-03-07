@@ -11,7 +11,7 @@ Usage:
 
 Options:
   --iters <int>          Number of iterations per run [default: 1000]
-  --runs <int>           Number of runs [default: 20]
+  --restarts <int>       Number of restarts [default: 20]
   -v --verbose           Print progress to STDERR
   -h --help              Show this screen
 
@@ -132,8 +132,8 @@ def _sampler_run(seqs, k, N, iters, verbose=False):
     return best_profile, best_scores, best_selected
 
 
-def sampler(seqs, k, N, iters, runs, verbose=False):
-    """Run sampler `runs` times.
+def sampler(seqs, k, N, iters, restarts, verbose=False):
+    """Run sampler `restarts` times.
 
     seqs: iterable of strings
     k: int, length of motif
@@ -142,19 +142,19 @@ def sampler(seqs, k, N, iters, runs, verbose=False):
     """
     results = []
     seqs = list(convert_string(s) for s in seqs)
-    for i in range(runs):
+    for i in range(restarts):
         if verbose:
-            sys.stderr.write('Starting run {} of {}.\n'.format(i + 1, runs))
+            sys.stderr.write('Starting run {} of {}.\n'.format(i + 1, restarts))
             sys.stderr.flush()
         results.append(_sampler_run(seqs, k, N, iters, verbose))
     return max(results, key=lambda args: score_state(args[1], args[2]))
 
 
-def find_in_file(infile, k, N, iters, runs, verbose=False):
+def find_in_file(infile, k, N, iters, restarts, verbose=False):
     """Runs finder on sequences in a fasta file"""
     records = list(SeqIO.parse(infile, 'fasta'))
     seqs = list(str(r.seq) for r in records)
-    profile, scores, selected = sampler(seqs, k, N, iters, runs, verbose)
+    profile, scores, selected = sampler(seqs, k, N, iters, restarts, verbose)
     print(profile)
     print('')
     for idx in np.nonzero(selected)[0]:
@@ -167,6 +167,6 @@ if __name__ == "__main__":
     k = int(args['<k>'])
     N = int(args['<N>'])
     iters = int(args['--iters'])
-    runs = int(args['--runs'])
+    restarts = int(args['--restarts'])
     verbose = args['--verbose']
-    find_in_file(infile, k, N, iters, runs, verbose)
+    find_in_file(infile, k, N, iters, restarts, verbose)

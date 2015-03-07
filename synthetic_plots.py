@@ -20,7 +20,7 @@ experiments = [
      'N': 10,
      'k': [5, 10, 15, 20, 25],
      'iters': 1000,
-     'starts': 10,
+     'restarts': 10,
  },
     {'name': 'gene length',
      'n_strings': 50,
@@ -28,7 +28,7 @@ experiments = [
      'N': 10,
      'k': 10,
      'iters': 1000,
-     'starts': 10,
+     'restarts': 10,
  },
     {'name': 'genes with motifs',
      'n_strings': 50,
@@ -36,7 +36,7 @@ experiments = [
      'N': [5, 10, 15, 20, 25],
      'k': 10,
      'iters': 1000,
-     'starts': 10,
+     'restarts': 10,
  },
     {'name': 'sampling iterations',
      'n_strings': 50,
@@ -44,7 +44,7 @@ experiments = [
      'N': 10,
      'k': 10,
      'iters': [100, 250, 500, 750, 1000],
-     'starts': 10,
+     'restarts': 10,
  },
     {'name': 'sampling restarts',
      'n_strings': 50,
@@ -52,7 +52,7 @@ experiments = [
      'N': 10,
      'k': 10,
      'iters': 1000,
-     'starts': [1, 5, 10, 15, 20],
+     'restarts': [1, 5, 10, 15, 20],
  },
 ]
 
@@ -78,7 +78,7 @@ def edit_distance(a, b):
 
 
 def run(name, n_strings, length, k, N,
-        iters=500, starts=10):
+        iters=500, restarts=10):
     params = locals()
     alphabet = 'ACGT'
     records = []
@@ -90,7 +90,7 @@ def run(name, n_strings, length, k, N,
             # TODO: mutate motif
             seqs[i] = ''.join((motif, seqs[i][len(motif):]))
         start = time.time()
-        profile, score, selected = sampler(seqs, k, N, iters, starts)
+        profile, score, selected = sampler(seqs, k, N, iters, restarts)
         stop = time.time()
         runtime = (stop - start)
         motif_dist = edit_distance(motif, format_profile(profile)) / k
