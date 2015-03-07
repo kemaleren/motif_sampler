@@ -10,7 +10,7 @@ from matplotlib import pyplot as pp
 from motif_sampler import sampler, format_profile
 
 
-replicates: 10
+replicates = 10
 
 
 experiments = [
