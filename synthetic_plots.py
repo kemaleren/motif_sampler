@@ -124,7 +124,7 @@ def experiment_iter(experiment):
 def run_all(outdir):
     all_records = []
     outfile = os.path.join(outdir, 'results.csv')
-    for experiment in experiments[:1]:
+    for experiment in experiments:
         print(experiment['name'])
         xkey = experiment_variable(experiment)
         for params in experiment_iter(experiment):
