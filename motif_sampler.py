@@ -6,7 +6,7 @@ Finds motifs in a subset of input sequences.
 Prints PWM and ids of selected genes to standard output.
 
 Usage:
-  find_motifs.py [options] <infile> <k> <N>
+  find_motifs.py [options] <infile> <outfile> <k> <N>
   find_motifs.py -h | --help
 
 Options:
@@ -14,6 +14,7 @@ Options:
   --burn-iters <int>     Number of iterations before inflection [default: 1000]
   --stop-iters <int>     Iterations without improvement before stopping [default: 1000]
   --restarts <int>       Number of restarts [default: 20]
+  --times <int>          Number of motifs to find [default: 1]
   -v --verbose           Print progress to STDERR
   -h --help              Show this screen
 
@@ -21,12 +22,9 @@ Options:
 
 import sys
 import math
-from functools import reduce
-from operator import add
-from collections import Counter
+import time
 
 import numpy as np
-import numpy.random
 
 from docopt import docopt
 
@@ -182,27 +180,45 @@ def sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose=Fa
     return max(results, key=lambda args: score_state(args[1], args[2]))
 
 
-def find_in_file(infile, k, N, inflection, burn_iters, stop_iters, restarts, verbose=False):
+def find_in_file(infile, outfile, k, N, inflection, burn_iters, stop_iters, restarts, times, verbose=False):
     """Runs finder on sequences in a fasta file"""
     records = list(SeqIO.parse(infile, 'fasta'))
     seqs = list(str(r.seq) for r in records if len(r.seq) > k)
     seqs = list(convert_string(s) for s in seqs)
-    profile, scores, selected = sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose)
-    print(format_profile(profile))
-    print(profile)
-    print('')
-    for idx in np.nonzero(selected)[0]:
-        print(records[idx].id)
+    for i in range(times):
+        start = time.time()
+        profile, scores, selected = sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose)
+        stop = time.time()
+        runtime = stop - start
+
+        info_file = '_'.join([outfile, 'info_{}.txt'.format(i)])
+        with open(info_file, 'w') as handle:
+            handle.write('k,N,inflection,burn,stop,restarts,runtime')
+            handle.write('\n')
+            handle.write(','.join(map(str, [k, N, inflection, burn_iters, stop_iters, restarts, runtime])))
+
+        profile_file = '_'.join([outfile, '_profile_{}.npy'.format(i)])
+        np.savetxt(profile_file, profile)
+
+
+        gene_file = '_'.join([outfile, '_genes_{}.txt'.format(i)])
+        with open(gene_file, 'w') as handle:
+            for idx in np.nonzero(selected)[0]:
+                handle.write(records[idx].id)
+                handle.write('\n')
+
 
 
 if __name__ == "__main__":
     args = docopt(__doc__)
     infile = args["<infile>"]
+    outfile = args["<outfile>"]
     k = int(args['<k>'])
     N = int(args['<N>'])
     inflection = float(args['--inflection'])
     burn_iters = int(args['--burn-iters'])
     stop_iters = int(args['--stop-iters'])
     restarts = int(args['--restarts'])
+    times = int(args['--times'])
     verbose = args['--verbose']
-    find_in_file(infile, k, N, inflection, burn_iters, stop_iters, restarts, verbose)
+    find_in_file(infile, outfile, k, N, inflection, burn_iters, stop_iters, restarts, times, verbose)
