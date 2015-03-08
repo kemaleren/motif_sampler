@@ -10,20 +10,21 @@ def random_string(alphabet, length):
     return ''.join(random.choice(alphabet) for _ in range(length))
 
 
-def run(repeats=1, iters=1000, restarts=10, verbose=True):
+def run(repeats=10, burn_iters=100, stop_iters=100, restarts=100, verbose=False):
     alphabet = 'ACGT'
-    n_strings = 4000
-    length = 2000
-    N = 200
-    k = 6
+    n_strings = 50
+    length = 100
+    N = 5
+    k = 10
     successes = 0
     found_strings = 0
     for r in range(repeats):
-        motif = 'TATAAT'
-        seqs = list(random_string('ACGT', length) for _ in range(n_strings))
+        print('replicate {} of {}'.format(r + 1, repeats))
+        motif = random_string(alphabet, k)
+        seqs = list(random_string(alphabet, length) for _ in range(n_strings))
         for i in range(N):
             seqs[i] = ''.join((motif, seqs[i][len(motif):]))
-        profile, score, selected = sampler(seqs, k, N, iters, restarts, verbose=verbose)
+        profile, score, selected = sampler(seqs, k, N, burn_iters, stop_iters, restarts, verbose=verbose)
         if format_profile(profile) == motif:
             successes += 1
         if set(np.nonzero(selected)[0]) == set(range(N)):
