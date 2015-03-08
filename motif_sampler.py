@@ -174,7 +174,6 @@ def sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose=Fa
 
     """
     results = []
-    seqs = list(convert_string(s) for s in seqs)
     for i in range(restarts):
         if verbose:
             sys.stderr.write('Starting run {} of {}.\n'.format(i + 1, restarts))
@@ -186,7 +185,8 @@ def sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose=Fa
 def find_in_file(infile, k, N, inflection, burn_iters, stop_iters, restarts, verbose=False):
     """Runs finder on sequences in a fasta file"""
     records = list(SeqIO.parse(infile, 'fasta'))
-    seqs = list(str(r.seq) for r in records)
+    seqs = list(str(r.seq) for r in records if len(r.seq) > k)
+    seqs = list(convert_string(s) for s in seqs)
     profile, scores, selected = sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose)
     print(format_profile(profile))
     print(profile)
