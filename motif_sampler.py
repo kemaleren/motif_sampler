@@ -10,7 +10,9 @@ Usage:
   find_motifs.py -h | --help
 
 Options:
-  --iters <int>          Number of iterations per run [default: 1000]
+  --inflection <float>   Inflection point [default: 0.05]
+  --burn-iters <int>     Number of iterations before inflection [default: 1000]
+  --stop-iters <int>     Iterations without improvement before stopping [default: 1000]
   --restarts <int>       Number of restarts [default: 20]
   -v --verbose           Print progress to STDERR
   -h --help              Show this screen
@@ -81,7 +83,7 @@ def make_profile_helper(motifs, selected, exclude=-1, alphsize=4):
                         exclude, alphsize)
 
 
-def _sampler_run(seqs, k, N, burn_iters, stop_iters, verbose=False):
+def _sampler_run(seqs, k, N, inflection, burn_iters, stop_iters, verbose=False):
     """Run a round of sampling"""
     n_seqs = len(seqs)
     motif_indices = list(np.random.randint(0, n_kmers(seq, k)) for seq in seqs)
@@ -100,15 +102,17 @@ def _sampler_run(seqs, k, N, burn_iters, stop_iters, verbose=False):
     iters_unchanged = 0
     temperature = 1
 
-    # compute alpha so temperature will drop to 0.1 after `burn_iters` iterations
-    alpha = np.exp(np.log(0.1 / temperature) / burn_iters)
+    # compute alpha so temperature will drop to `inflection` after `burn_iters` iterations
+    alpha = np.exp(np.log(inflection / temperature) / burn_iters)
 
     iters_update = 100
 
     while iters_unchanged < stop_iters:
         if verbose:
             if _iter % iters_update == 0:
-                sys.stderr.write('  iteration: {} temperature: {}\n'.format(_iter, temperature))
+                sys.stderr.write('  iteration: {}, iterations since best: {},'
+                                 ' temperature: {}, score: {}\n'.format(
+                                     _iter, iters_unchanged, temperature, best_score))
                 sys.stderr.flush()
 
         # compute and transform probabilities
@@ -121,6 +125,13 @@ def _sampler_run(seqs, k, N, burn_iters, stop_iters, verbose=False):
         make_probs(probs, _not_selected)
         softmax_probs(probs, _selected, temperature)
         softmax_probs(probs, _not_selected, temperature)
+
+        if verbose:
+            if _iter % iters_update == 0:
+                if len(np.nonzero(probs[selected])[0]) == 1:
+                    print('greedy selected sequences')
+                if len(np.nonzero(probs[not_selected])[0]) == 1:
+                    print('greedy non-selected sequences')
 
         # swap out a sequence, maybe
         to_remove = choose_index_selected(probs, _selected)
@@ -154,7 +165,7 @@ def _sampler_run(seqs, k, N, burn_iters, stop_iters, verbose=False):
     return best_profile, best_scores, best_selected
 
 
-def sampler(seqs, k, N, burn_iters, stop_iters, restarts, verbose=False):
+def sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose=False):
     """Run sampler `restarts` times.
 
     seqs: iterable of strings
@@ -168,15 +179,16 @@ def sampler(seqs, k, N, burn_iters, stop_iters, restarts, verbose=False):
         if verbose:
             sys.stderr.write('Starting run {} of {}.\n'.format(i + 1, restarts))
             sys.stderr.flush()
-        results.append(_sampler_run(seqs, k, N, burn_iters, stop_iters, verbose))
+        results.append(_sampler_run(seqs, k, N, inflection, burn_iters, stop_iters, verbose))
     return max(results, key=lambda args: score_state(args[1], args[2]))
 
 
-def find_in_file(infile, k, N, burn_iters, stop_iters, restarts, verbose=False):
+def find_in_file(infile, k, N, inflection, burn_iters, stop_iters, restarts, verbose=False):
     """Runs finder on sequences in a fasta file"""
     records = list(SeqIO.parse(infile, 'fasta'))
     seqs = list(str(r.seq) for r in records)
-    profile, scores, selected = sampler(seqs, k, N, burn_iters, stop_iters, restarts, verbose)
+    profile, scores, selected = sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose)
+    print(format_profile(profile))
     print(profile)
     print('')
     for idx in np.nonzero(selected)[0]:
@@ -188,8 +200,9 @@ if __name__ == "__main__":
     infile = args["<infile>"]
     k = int(args['<k>'])
     N = int(args['<N>'])
+    inflection = float(args['--inflection'])
     burn_iters = int(args['--burn-iters'])
     stop_iters = int(args['--stop-iters'])
     restarts = int(args['--restarts'])
     verbose = args['--verbose']
-    find_in_file(infile, k, N, burn_iters, stop_iters, restarts, verbose)
+    find_in_file(infile, k, N, inflection, burn_iters, stop_iters, restarts, verbose)

@@ -10,7 +10,7 @@ def random_string(alphabet, length):
     return ''.join(random.choice(alphabet) for _ in range(length))
 
 
-def run(repeats=10, burn_iters=100, stop_iters=100, restarts=100, verbose=False):
+def run(repeats=10, inflection=0.05, burn_iters=100, stop_iters=100, restarts=100, verbose=False):
     alphabet = 'ACGT'
     n_strings = 50
     length = 100
@@ -24,7 +24,7 @@ def run(repeats=10, burn_iters=100, stop_iters=100, restarts=100, verbose=False)
         seqs = list(random_string(alphabet, length) for _ in range(n_strings))
         for i in range(N):
             seqs[i] = ''.join((motif, seqs[i][len(motif):]))
-        profile, score, selected = sampler(seqs, k, N, burn_iters, stop_iters, restarts, verbose=verbose)
+        profile, score, selected = sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose=verbose)
         if format_profile(profile) == motif:
             successes += 1
         if set(np.nonzero(selected)[0]) == set(range(N)):
