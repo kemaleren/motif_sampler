@@ -6,7 +6,7 @@ Finds motifs in a subset of input sequences.
 Prints PWM and ids of selected genes to standard output.
 
 Usage:
-  find_motifs.py [options] <infile> <outfile> <k> <N>
+  find_motifs.py [options] <infile> <outfile> <ks> <N>
   find_motifs.py -h | --help
 
 Options:
@@ -84,13 +84,16 @@ def make_profile_helper(motifs, selected, exclude=-1, alphsize=4):
 def _sampler_run(seqs, k, N, inflection, burn_iters, stop_iters, verbose=False):
     """Run a round of sampling"""
     n_seqs = len(seqs)
-    motif_indices = list(np.random.randint(0, n_kmers(seq, k)) for seq in seqs)
-    motifs = np.vstack(list(seq[i:i + k] for i, seq in zip(motif_indices, seqs)))
+    motif_indices = list(np.random.randint(0, n_kmers(seq, k))
+                         for seq in seqs)
+    motifs = np.vstack(list(seq[i:i + k]
+                            for i, seq in zip(motif_indices, seqs)))
     selected = np.zeros(n_seqs, dtype=np.bool)
     selected[:N] = True
     np.random.shuffle(selected)
     profile = make_profile_helper(motifs, selected)
-    scores = np.array(list(score_string(seq, profile) for seq in seqs), dtype=np.float32)
+    scores = np.array(list(score_string(seq, profile)
+                           for seq in seqs), dtype=np.float32)
     best_profile = profile
     best_selected = selected.copy()
     best_scores = scores
@@ -100,12 +103,15 @@ def _sampler_run(seqs, k, N, inflection, burn_iters, stop_iters, verbose=False):
     iters_unchanged = 0
     temperature = 1
 
-    # compute alpha so temperature will drop to `inflection` after `burn_iters` iterations
+    # compute alpha so temperature will drop to `inflection` after
+    # `burn_iters` iterations
     alpha = np.exp(np.log(inflection / temperature) / burn_iters)
 
     iters_update = 100
 
-    while iters_unchanged < stop_iters:
+    # don't start counting unchanged iterations until after burn-in
+    # period, to ensure optimization does not stop during hot period.
+    while min(iters_unchanged, _iter - burn_iters) < stop_iters:
         if verbose:
             if _iter % iters_update == 0:
                 sys.stderr.write('  iteration: {}, iterations since best: {},'
@@ -174,46 +180,49 @@ def sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose=Fa
     results = []
     for i in range(restarts):
         if verbose:
-            sys.stderr.write('Starting run {} of {}.\n'.format(i + 1, restarts))
+            sys.stderr.write('Restart {} of {}\n'.format(i + 1, restarts))
             sys.stderr.flush()
         results.append(_sampler_run(seqs, k, N, inflection, burn_iters, stop_iters, verbose))
     return max(results, key=lambda args: score_state(args[1], args[2]))
 
 
-def find_in_file(infile, outfile, k, N, inflection, burn_iters, stop_iters, restarts, times, verbose=False):
+def find_in_file(infile, outfile, ks, N, inflection, burn_iters, stop_iters, restarts, times, verbose=False):
     """Runs finder on sequences in a fasta file"""
     records = list(SeqIO.parse(infile, 'fasta'))
-    seqs = list(str(r.seq) for r in records if len(r.seq) > k)
-    seqs = list(convert_string(s) for s in seqs)
-    for i in range(times):
-        start = time.time()
-        profile, scores, selected = sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose)
-        stop = time.time()
-        runtime = stop - start
+    for k in ks:
+        seqs = list(str(r.seq) for r in records if len(r.seq) > k)
+        seqs = list(convert_string(s) for s in seqs)
+        for i in range(times):
+            if verbose:
+                sys.stderr.write('k={}, run {} of {}\n'.format(k, i + 1, times))
+                sys.stderr.flush()
 
-        info_file = '_'.join([outfile, 'info_{}.txt'.format(i)])
-        with open(info_file, 'w') as handle:
-            handle.write('k,N,inflection,burn,stop,restarts,runtime')
-            handle.write('\n')
-            handle.write(','.join(map(str, [k, N, inflection, burn_iters, stop_iters, restarts, runtime])))
+            start = time.time()
+            profile, scores, selected = sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose)
+            stop = time.time()
+            runtime = stop - start
 
-        profile_file = '_'.join([outfile, '_profile_{}.npy'.format(i)])
-        np.savetxt(profile_file, profile)
-
-
-        gene_file = '_'.join([outfile, '_genes_{}.txt'.format(i)])
-        with open(gene_file, 'w') as handle:
-            for idx in np.nonzero(selected)[0]:
-                handle.write(records[idx].id)
+            info_file = '_'.join([outfile, str(k), 'info_{}.txt'.format(i)])
+            with open(info_file, 'w') as handle:
+                handle.write('k,N,inflection,burn,stop,restarts,runtime')
                 handle.write('\n')
+                handle.write(','.join(map(str, [k, N, inflection, burn_iters, stop_iters, restarts, runtime])))
 
+            profile_file = '_'.join([outfile, str(k), 'profile_{}.npy'.format(i)])
+            np.savetxt(profile_file, profile)
+
+            gene_file = '_'.join([outfile, str(k), 'genes_{}.txt'.format(i)])
+            with open(gene_file, 'w') as handle:
+                for idx in np.nonzero(selected)[0]:
+                    handle.write(records[idx].id)
+                    handle.write('\n')
 
 
 if __name__ == "__main__":
     args = docopt(__doc__)
     infile = args["<infile>"]
     outfile = args["<outfile>"]
-    k = int(args['<k>'])
+    ks = map(int, args['<ks>'].split(','))
     N = int(args['<N>'])
     inflection = float(args['--inflection'])
     burn_iters = int(args['--burn-iters'])
@@ -221,4 +230,4 @@ if __name__ == "__main__":
     restarts = int(args['--restarts'])
     times = int(args['--times'])
     verbose = args['--verbose']
-    find_in_file(infile, outfile, k, N, inflection, burn_iters, stop_iters, restarts, times, verbose)
+    find_in_file(infile, outfile, ks, N, inflection, burn_iters, stop_iters, restarts, times, verbose)
