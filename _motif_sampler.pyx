@@ -5,7 +5,7 @@
 import numpy as np
 cimport numpy as np
 
-from libc.math cimport log
+from libc.math cimport log, exp
 from libc.stdlib cimport rand
 
 cdef extern from "limits.h":
@@ -39,9 +39,19 @@ def choose_index(float[:] weights):
     return result
 
 
-def invert_selected(float[:] weights, np.uint8_t[:] selected):
-    result = np.empty_like(weights)
-    cdef float [:] result_view = result
+def invert_probs(float[:] weights, np.uint8_t[:] selected):
+    cdef float total = 0
+    cdef unsigned int i
+    with nogil:
+        for i in range(weights.shape[0]):
+            if selected[i]:
+                total += (1 - weights[i])
+        for i in range(weights.shape[0]):
+            if selected[i]:
+                weights[i] = (1 - weights[i]) / total
+
+
+def make_probs(float[:] weights, np.uint8_t[:] selected):
     cdef float total = 0
     cdef unsigned int i
     with nogil:
@@ -50,8 +60,38 @@ def invert_selected(float[:] weights, np.uint8_t[:] selected):
                 total += weights[i]
         for i in range(weights.shape[0]):
             if selected[i]:
-                result_view[i] = 1 - (weights[i] / total)
-    return result
+                weights[i] = weights[i] / total
+
+
+def softmax_probs(float[:] weights, np.uint8_t[:] selected, float temp):
+    reweight = np.empty_like(weights)
+    cdef float[:] reweight_view = reweight
+    cdef float total = 0
+    cdef float logsumexp = 0
+    cdef float b = -1
+    cdef unsigned long index = 0
+    cdef unsigned int i
+    with nogil:
+        for i in range(weights.shape[0]):
+            if selected[i]:
+                reweight_view[i] = weights[i] / temp
+                if reweight_view[i] > b:
+                    b = reweight_view[i]
+                    index = i
+        if b == 0:
+            # temperature computation underflowed
+            for i in range(weights.shape[0]):
+                if selected[i]:
+                    weights[i] = 0
+                weights[index] = 1
+        else:
+            for i in range(weights.shape[0]):
+                if selected[i]:
+                    total += exp(reweight_view[i] - b)
+            logsumexp = b + log(total)
+            for i in range(weights.shape[0]):
+                if selected[i]:
+                    weights[i] = exp(reweight_view[i] - logsumexp)
 
 
 def choose_index_selected(float[:] weights, np.uint8_t[:] selected):

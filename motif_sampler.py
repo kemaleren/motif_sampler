@@ -33,7 +33,7 @@ from Bio import SeqIO
 from _motif_sampler import make_profile, all_kmer_scores, score_string
 from _motif_sampler import choose_index, choose_index_selected
 from _motif_sampler import choose_index_selected_unweighted
-from _motif_sampler import invert_selected
+from _motif_sampler import make_probs, invert_probs, softmax_probs
 
 
 
@@ -81,7 +81,7 @@ def make_profile_helper(motifs, selected, exclude=-1, alphsize=4):
                         exclude, alphsize)
 
 
-def _sampler_run(seqs, k, N, iters, verbose=False):
+def _sampler_run(seqs, k, N, burn_iters, stop_iters, verbose=False):
     """Run a round of sampling"""
     n_seqs = len(seqs)
     motif_indices = list(np.random.randint(0, n_kmers(seq, k)) for seq in seqs)
@@ -96,20 +96,36 @@ def _sampler_run(seqs, k, N, iters, verbose=False):
     best_scores = scores
     best_score = score_state(best_scores, best_selected)
 
-    iters_update = iters // 10
-    for i in range(iters):
+    _iter = 0
+    iters_unchanged = 0
+    temperature = 1
+
+    # compute alpha so temperature will drop to 0.1 after `burn_iters` iterations
+    alpha = np.exp(np.log(0.1 / temperature) / burn_iters)
+
+    iters_update = 100
+
+    while iters_unchanged < stop_iters:
         if verbose:
-            if i % iters_update == 0:
-                sys.stderr.write('  iteration {} of {}\n'.format(i, iters))
+            if _iter % iters_update == 0:
+                sys.stderr.write('  iteration: {} temperature: {}\n'.format(_iter, temperature))
                 sys.stderr.flush()
 
-        # swap out a sequence, maybe
-        weights = np.exp(scores)
+        # compute and transform probabilities
+        not_selected = np.invert(selected)
         _selected = selected.astype(np.uint8)
-        inv_weights = invert_selected(weights, _selected)
-        to_remove = choose_index_selected(inv_weights, _selected)
-        to_add = choose_index_selected(weights, 1 - _selected)
-        log_ratio = scores[to_add] - scores[to_remove]
+        _not_selected = not_selected.astype(np.uint8)
+        probs = np.exp(scores)
+        make_probs(probs, _selected)
+        invert_probs(probs, _selected)
+        make_probs(probs, _not_selected)
+        softmax_probs(probs, _selected, temperature)
+        softmax_probs(probs, _not_selected, temperature)
+
+        # swap out a sequence, maybe
+        to_remove = choose_index_selected(probs, _selected)
+        to_add = choose_index_selected(probs, _not_selected)
+        log_ratio = np.log(probs[to_add]) - np.log(probs[to_remove])
         if log_ratio > 0 or log_bernoulli(log_ratio):
             selected[to_remove] = False
             selected[to_add] = True
@@ -129,10 +145,16 @@ def _sampler_run(seqs, k, N, iters, verbose=False):
             best_profile = profile
             best_scores = scores
             best_selected = selected.copy()
+            iters_unchanged = 0
+        else:
+            iters_unchanged += 1
+        _iter += 1
+        temperature = temperature * alpha
+
     return best_profile, best_scores, best_selected
 
 
-def sampler(seqs, k, N, iters, restarts, verbose=False):
+def sampler(seqs, k, N, burn_iters, stop_iters, restarts, verbose=False):
     """Run sampler `restarts` times.
 
     seqs: iterable of strings
@@ -146,15 +168,15 @@ def sampler(seqs, k, N, iters, restarts, verbose=False):
         if verbose:
             sys.stderr.write('Starting run {} of {}.\n'.format(i + 1, restarts))
             sys.stderr.flush()
-        results.append(_sampler_run(seqs, k, N, iters, verbose))
+        results.append(_sampler_run(seqs, k, N, burn_iters, stop_iters, verbose))
     return max(results, key=lambda args: score_state(args[1], args[2]))
 
 
-def find_in_file(infile, k, N, iters, restarts, verbose=False):
+def find_in_file(infile, k, N, burn_iters, stop_iters, restarts, verbose=False):
     """Runs finder on sequences in a fasta file"""
     records = list(SeqIO.parse(infile, 'fasta'))
     seqs = list(str(r.seq) for r in records)
-    profile, scores, selected = sampler(seqs, k, N, iters, restarts, verbose)
+    profile, scores, selected = sampler(seqs, k, N, burn_iters, stop_iters, restarts, verbose)
     print(profile)
     print('')
     for idx in np.nonzero(selected)[0]:
@@ -166,7 +188,8 @@ if __name__ == "__main__":
     infile = args["<infile>"]
     k = int(args['<k>'])
     N = int(args['<N>'])
-    iters = int(args['--iters'])
+    burn_iters = int(args['--burn-iters'])
+    stop_iters = int(args['--stop-iters'])
     restarts = int(args['--restarts'])
     verbose = args['--verbose']
-    find_in_file(infile, k, N, iters, restarts, verbose)
+    find_in_file(infile, k, N, burn_iters, stop_iters, restarts, verbose)
