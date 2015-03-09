@@ -6,7 +6,7 @@ Finds motifs in a subset of input sequences.
 Prints PWM and ids of selected genes to standard output.
 
 Usage:
-  find_motifs.py [options] <infile> <outfile> <ks> <N>
+  find_motifs.py [options] <infile> <outfile> <ks> <Ns>
   find_motifs.py -h | --help
 
 Options:
@@ -190,7 +190,7 @@ def sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose=Fa
     return max(results, key=lambda args: score_state(args[2], args[3]))
 
 
-def find_in_file(infile, outfile, ks, N, inflection, burn_iters, stop_iters, restarts, times, verbose=False):
+def find_in_file(infile, outfile, ks, Ns, inflection, burn_iters, stop_iters, restarts, times, verbose=False):
     """Runs finder on sequences in a fasta file"""
     records = list(SeqIO.parse(infile, 'fasta'))
     ids = list(r.id for r in records)
@@ -204,48 +204,49 @@ def find_in_file(infile, outfile, ks, N, inflection, burn_iters, stop_iters, res
     del fwd_seqs
     del rcomp_seqs
     for k in ks:
-        seqs = list(str(seq) for seq in all_seqs if len(seq) > k)
-        seqs = list(convert_string(s) for s in seqs)
-        for i in range(times):
-            if verbose:
-                sys.stderr.write('k={}, run {} of {}\n'.format(k, i + 1, times))
-                sys.stderr.flush()
+        for N in Ns:
+            seqs = list(str(seq) for seq in all_seqs if len(seq) > k)
+            seqs = list(convert_string(s) for s in seqs)
+            for i in range(times):
+                if verbose:
+                    sys.stderr.write('k={}, N={}, run {} of {}\n'.format(k, N, i + 1, times))
+                    sys.stderr.flush()
 
-            start = time.time()
-            motif, profile, scores, selected, iters = sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose)
-            stop = time.time()
-            runtime = stop - start
+                start = time.time()
+                motif, profile, scores, selected, iters = sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose)
+                stop = time.time()
+                runtime = stop - start
 
-            info_file = '_'.join([outfile, str(k), 'info_{}.txt'.format(i)])
-            with open(info_file, 'w') as handle:
-                handle.write('k,N,inflection,burn,stop,restarts,runtime,iters')
-                handle.write('\n')
-                handle.write(','.join(map(str, [k, N, inflection, burn_iters, stop_iters, restarts, runtime, iters])))
-
-            motif_file = '_'.join([outfile, str(k), 'motif_{}.fasta'.format(i)])
-            motif_records = list(SeqRecord(Seq(revert_string(m)), id='', description='') for m in motif)
-            SeqIO.write(motif_records, motif_file, 'fasta')
-
-            profile_file = '_'.join([outfile, str(k), 'profile_{}.fasta'.format(i)])
-            np.savetxt(profile_file, profile)
-
-            gene_file = '_'.join([outfile, str(k), 'genes_{}.txt'.format(i)])
-            with open(gene_file, 'w') as handle:
-                for idx in np.nonzero(selected)[0]:
-                    handle.write(all_ids[idx])
+                info_file = '_'.join([outfile, str(k), str(N), 'info_{}.txt'.format(i)])
+                with open(info_file, 'w') as handle:
+                    handle.write('k,N,inflection,burn,stop,restarts,runtime,iters')
                     handle.write('\n')
+                    handle.write(','.join(map(str, [k, N, inflection, burn_iters, stop_iters, restarts, runtime, iters])))
+
+                motif_file = '_'.join([outfile, str(k), str(N), 'motif_{}.fasta'.format(i)])
+                motif_records = list(SeqRecord(Seq(revert_string(m)), id='', description='') for m in motif)
+                SeqIO.write(motif_records, motif_file, 'fasta')
+
+                profile_file = '_'.join([outfile, str(k), str(N), 'profile_{}.txt'.format(i)])
+                np.savetxt(profile_file, profile)
+
+                gene_file = '_'.join([outfile, str(k), str(N), 'genes_{}.txt'.format(i)])
+                with open(gene_file, 'w') as handle:
+                    for idx in np.nonzero(selected)[0]:
+                        handle.write(all_ids[idx])
+                        handle.write('\n')
 
 
 if __name__ == "__main__":
     args = docopt(__doc__)
     infile = args["<infile>"]
     outfile = args["<outfile>"]
-    ks = map(int, args['<ks>'].split(','))
-    N = int(args['<N>'])
+    ks = list(map(int, args['<ks>'].split(',')))
+    Ns = list(map(int, args['<Ns>'].split(',')))
     inflection = float(args['--inflection'])
     burn_iters = int(args['--burn-iters'])
     stop_iters = int(args['--stop-iters'])
     restarts = int(args['--restarts'])
     times = int(args['--times'])
     verbose = args['--verbose']
-    find_in_file(infile, outfile, ks, N, inflection, burn_iters, stop_iters, restarts, times, verbose)
+    find_in_file(infile, outfile, ks, Ns, inflection, burn_iters, stop_iters, restarts, times, verbose)
