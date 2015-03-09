@@ -170,7 +170,7 @@ def _sampler_run(seqs, k, N, inflection, burn_iters, stop_iters, verbose=False):
         _iter += 1
         temperature = temperature * alpha
 
-    return best_motif, best_scores, best_selected, _iter
+    return best_motif, best_profile, best_scores, best_selected, _iter
 
 
 def sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose=False):
@@ -187,14 +187,22 @@ def sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose=Fa
             sys.stderr.write('Restart {} of {}\n'.format(i + 1, restarts))
             sys.stderr.flush()
         results.append(_sampler_run(seqs, k, N, inflection, burn_iters, stop_iters, verbose))
-    return max(results, key=lambda args: score_state(args[1], args[2]))
+    return max(results, key=lambda args: score_state(args[2], args[3]))
 
 
 def find_in_file(infile, outfile, ks, N, inflection, burn_iters, stop_iters, restarts, times, verbose=False):
     """Runs finder on sequences in a fasta file"""
     records = list(SeqIO.parse(infile, 'fasta'))
+    ids = list(r.id for r in records)
+    fwd_seqs = list(r.seq for r in records)
+    rcomp_seqs = list(s.reverse_complement() for s in fwd_seqs)
+    all_seqs = fwd_seqs + rcomp_seqs
+    all_ids = ids + ids
+    del records
+    del fwd_seqs
+    del rcomp_seqs
     for k in ks:
-        seqs = list(str(r.seq) for r in records if len(r.seq) > k)
+        seqs = list(str(seq) for seq in all_seqs if len(seq) > k)
         seqs = list(convert_string(s) for s in seqs)
         for i in range(times):
             if verbose:
@@ -202,7 +210,7 @@ def find_in_file(infile, outfile, ks, N, inflection, burn_iters, stop_iters, res
                 sys.stderr.flush()
 
             start = time.time()
-            motif, scores, selected, iters = sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose)
+            motif, profile, scores, selected, iters = sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose)
             stop = time.time()
             runtime = stop - start
 
@@ -216,10 +224,13 @@ def find_in_file(infile, outfile, ks, N, inflection, burn_iters, stop_iters, res
             motif_records = list(SeqRecord(Seq(revert_string(m)), id='', description='') for m in motif)
             SeqIO.write(motif_records, motif_file, 'fasta')
 
+            profile_file = '_'.join([outfile, str(k), 'profile_{}.fasta'.format(i)])
+            np.savetxt(profile_file, profile)
+
             gene_file = '_'.join([outfile, str(k), 'genes_{}.txt'.format(i)])
             with open(gene_file, 'w') as handle:
                 for idx in np.nonzero(selected)[0]:
-                    handle.write(records[idx].id)
+                    handle.write(all_ids[idx])
                     handle.write('\n')
 
 
