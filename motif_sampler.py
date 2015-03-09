@@ -28,6 +28,8 @@ import numpy as np
 
 from docopt import docopt
 
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
 from Bio import SeqIO
 
 from _motif_sampler import make_profile, all_kmer_scores, score_string
@@ -94,6 +96,7 @@ def _sampler_run(seqs, k, N, inflection, burn_iters, stop_iters, verbose=False):
     profile = make_profile_helper(motifs, selected)
     scores = np.array(list(score_string(seq, profile)
                            for seq in seqs), dtype=np.float32)
+    best_motif = motifs[selected].copy()
     best_profile = profile
     best_selected = selected.copy()
     best_scores = scores
@@ -156,6 +159,7 @@ def _sampler_run(seqs, k, N, inflection, burn_iters, stop_iters, verbose=False):
 
         # update best
         if score > best_score:
+            best_motif = motifs[selected].copy()
             best_score = score
             best_profile = profile
             best_scores = scores
@@ -166,7 +170,7 @@ def _sampler_run(seqs, k, N, inflection, burn_iters, stop_iters, verbose=False):
         _iter += 1
         temperature = temperature * alpha
 
-    return best_profile, best_scores, best_selected
+    return best_motif, best_scores, best_selected, _iter
 
 
 def sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose=False):
@@ -198,18 +202,19 @@ def find_in_file(infile, outfile, ks, N, inflection, burn_iters, stop_iters, res
                 sys.stderr.flush()
 
             start = time.time()
-            profile, scores, selected = sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose)
+            motif, scores, selected, iters = sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose)
             stop = time.time()
             runtime = stop - start
 
             info_file = '_'.join([outfile, str(k), 'info_{}.txt'.format(i)])
             with open(info_file, 'w') as handle:
-                handle.write('k,N,inflection,burn,stop,restarts,runtime')
+                handle.write('k,N,inflection,burn,stop,restarts,runtime,iters')
                 handle.write('\n')
-                handle.write(','.join(map(str, [k, N, inflection, burn_iters, stop_iters, restarts, runtime])))
+                handle.write(','.join(map(str, [k, N, inflection, burn_iters, stop_iters, restarts, runtime, iters])))
 
-            profile_file = '_'.join([outfile, str(k), 'profile_{}.npy'.format(i)])
-            np.savetxt(profile_file, profile)
+            motif_file = '_'.join([outfile, str(k), 'motif_{}.fasta'.format(i)])
+            motif_records = list(SeqRecord(Seq(revert_string(m)), id='', description='') for m in motif)
+            SeqIO.write(motif_records, motif_file, 'fasta')
 
             gene_file = '_'.join([outfile, str(k), 'genes_{}.txt'.format(i)])
             with open(gene_file, 'w') as handle:
