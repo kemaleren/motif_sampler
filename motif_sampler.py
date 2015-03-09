@@ -193,6 +193,10 @@ def sampler(seqs, k, N, inflection, burn_iters, stop_iters, restarts, verbose=Fa
 def find_in_file(infile, outfile, ks, Ns, inflection, burn_iters, stop_iters, restarts, times, verbose=False):
     """Runs finder on sequences in a fasta file"""
     records = list(SeqIO.parse(infile, 'fasta'))
+    alphabet = set('ACGT')
+
+    # cannot handle ambiguous nucleotides
+    records = list(r for r in records if set(r.seq) == alphabet)
     ids = list(r.id for r in records)
     fwd_seqs = list(r.seq for r in records)
     rcomp_seqs = list(s.reverse_complement() for s in fwd_seqs)
