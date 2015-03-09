@@ -196,8 +196,10 @@ def find_in_file(infile, outfile, ks, N, inflection, burn_iters, stop_iters, res
     ids = list(r.id for r in records)
     fwd_seqs = list(r.seq for r in records)
     rcomp_seqs = list(s.reverse_complement() for s in fwd_seqs)
+    rcomp_ids = list('{} (rcomp)'.format(i) for i in ids)
     all_seqs = fwd_seqs + rcomp_seqs
-    all_ids = ids + ids
+    all_ids = ids + rcomp_ids
+
     del records
     del fwd_seqs
     del rcomp_seqs
